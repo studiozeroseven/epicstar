@@ -21,6 +21,7 @@ class CustomJsonFormatter(jsonlogger.JsonFormatter):
         log_record["logger"] = record.name
         log_record["app"] = settings.app_name
         log_record["environment"] = settings.environment
+        log_record["timestamp"] = self.formatTime(record, self.datefmt)
 
 
 def setup_logging() -> None:
@@ -40,8 +41,7 @@ def setup_logging() -> None:
 
     if settings.log_format == "json":
         formatter = CustomJsonFormatter(
-            "%(timestamp)s %(level)s %(name)s %(message)s",
-            rename_fields={"asctime": "timestamp"},
+            "%(timestamp)s %(level)s %(name)s %(message)s"
         )
     else:
         formatter = logging.Formatter(
@@ -68,4 +68,3 @@ def setup_logging() -> None:
 def get_logger(name: str) -> logging.Logger:
     """Get a logger instance."""
     return logging.getLogger(name)
-

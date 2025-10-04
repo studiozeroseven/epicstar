@@ -17,6 +17,10 @@ Base = declarative_base()
 is_sqlite = settings.database_url.startswith("sqlite")
 is_async = not is_sqlite
 
+# Initialize session makers
+AsyncSessionLocal = None
+SessionLocal = None
+
 if is_async:
     # PostgreSQL with asyncpg
     async_engine = create_async_engine(
@@ -32,47 +36,43 @@ if is_async:
         expire_on_commit=False,
     )
 else:
-    # SQLite (sync only)
+    # SQLite with aiosqlite for async support
     engine = create_engine(
         settings.database_url,
         connect_args={"check_same_thread": False} if is_sqlite else {},
         echo=False,
     )
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    
+    # Create async session for SQLite too
+    async_engine = create_async_engine(
+        settings.database_url.replace("sqlite://", "sqlite+aiosqlite://"),
+        connect_args={"check_same_thread": False},
+        echo=False,
+    )
+    AsyncSessionLocal = async_sessionmaker(
+        async_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+    )
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """Get database session."""
-    if is_async:
-        async with AsyncSessionLocal() as session:
-            try:
-                yield session
-                await session.commit()
-            except Exception:
-                await session.rollback()
-                raise
-    else:
-        # For SQLite, we'll use sync session wrapped in async
-        session = SessionLocal()
+    async with AsyncSessionLocal() as session:
         try:
             yield session
-            session.commit()
+            await session.commit()
         except Exception:
-            session.rollback()
+            await session.rollback()
             raise
-        finally:
-            session.close()
 
 
 async def get_db_health() -> str:
     """Check database health."""
     try:
-        if is_async:
-            async with AsyncSessionLocal() as session:
-                await session.execute(text("SELECT 1"))
-        else:
-            with SessionLocal() as session:
-                session.execute(text("SELECT 1"))
+        async with AsyncSessionLocal() as session:
+            await session.execute(text("SELECT 1"))
         return "connected"
     except Exception as e:
         logger.error(f"Database health check failed: {e}")
@@ -81,10 +81,6 @@ async def get_db_health() -> str:
 
 async def init_db() -> None:
     """Initialize database tables."""
-    if is_async:
-        async with async_engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-    else:
-        Base.metadata.create_all(bind=engine)
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
     logger.info("Database initialized")
-
