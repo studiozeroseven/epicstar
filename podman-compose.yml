@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Containerfile
+    container_name: github-onedev-sync
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - APP_PORT=8000
+      
+      # GitHub App
+      - GITHUB_APP_ID=${GITHUB_APP_ID}
+      - GITHUB_WEBHOOK_SECRET=${GITHUB_WEBHOOK_SECRET}
+      - GITHUB_PRIVATE_KEY_PATH=/app/secrets/github-app-key.pem
+      
+      # OneDev
+      - ONEDEV_API_URL=${ONEDEV_API_URL}
+      - ONEDEV_API_TOKEN=${ONEDEV_API_TOKEN}
+      - ONEDEV_REPO_PREFIX=${ONEDEV_REPO_PREFIX:-github-}
+      
+      # Database
+      - DATABASE_URL=${DATABASE_URL:-postgresql://syncuser:syncpass@db:5432/syncdb}
+      
+      # Git Operations
+      - GIT_TEMP_DIR=/tmp/git-sync
+      - GIT_CLONE_TIMEOUT=1800
+      - GIT_PUSH_TIMEOUT=1800
+      
+      # Logging
+      - LOG_FORMAT=json
+    volumes:
+      - ./secrets:/app/secrets:ro
+      - git-temp:/tmp/git-sync
+    depends_on:
+      - db
+    restart: unless-stopped
+    networks:
+      - sync-network
+
+  db:
+    image: docker.io/library/postgres:15-alpine
+    container_name: github-onedev-sync-db
+    environment:
+      - POSTGRES_USER=${DB_USER:-syncuser}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-syncpass}
+      - POSTGRES_DB=${DB_NAME:-syncdb}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - sync-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-syncuser}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  db-data:
+  git-temp:
+
+networks:
+  sync-network:
+    driver: bridge
+
