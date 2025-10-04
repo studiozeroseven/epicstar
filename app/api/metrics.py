@@ -1,6 +1,6 @@
 """Prometheus metrics endpoints."""
 
-from typing import Dict
+from typing import Any, Dict
 
 from fastapi import APIRouter
 from prometheus_client import (
@@ -72,7 +72,7 @@ async def metrics() -> Response:
 
 
 @router.get("/metrics/summary")
-async def metrics_summary() -> Dict[str, any]:
+async def metrics_summary() -> Dict[str, Any]:
     """
     Human-readable metrics summary.
     
