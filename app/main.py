@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.health import router as health_router
 from app.api.webhooks import router as webhook_router
+from app.api.metrics import router as metrics_router
 from app.config import settings
 from app.core.logging import get_logger, setup_logging
 from app.db.database import init_db
@@ -54,6 +55,7 @@ if settings.cors_enabled:
 # Include routers
 app.include_router(health_router, tags=["health"])
 app.include_router(webhook_router, tags=["webhooks"])
+app.include_router(metrics_router, tags=["metrics"])
 
 if __name__ == "__main__":
     import uvicorn

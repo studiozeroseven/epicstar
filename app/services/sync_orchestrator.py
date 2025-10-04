@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.logging import get_logger
+from app.core.retry import with_retry
 from app.db.crud import RepositoryCRUD, SyncLogCRUD, WebhookEventCRUD
 from app.db.database import AsyncSessionLocal
 from app.integrations.github_client import GitHubClient
@@ -28,6 +29,7 @@ class SyncOrchestrator:
         self.onedev_client = OneDevClient()
         self.git_ops = GitOperations()
 
+    @with_retry(max_attempts=3, min_wait=4, max_wait=60)
     async def process_star_event(self, event: WatchEvent, delivery_id: str) -> Dict[str, any]:
         """
         Process a GitHub star event.

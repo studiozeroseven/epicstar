@@ -10,6 +10,12 @@ from app.core.logging import get_logger
 from app.core.security import verify_github_signature
 from app.models.webhook import WatchEvent
 from app.services.sync_orchestrator import SyncOrchestrator
+from app.api.metrics import (
+    record_webhook_request,
+    record_sync_operation,
+    increment_active_syncs,
+    decrement_active_syncs,
+)
 from app.utils.exceptions import WebhookValidationError
 
 router = APIRouter()
@@ -102,8 +108,17 @@ async def github_webhook(
 
     # Process the sync
     try:
+        increment_active_syncs()
         orchestrator = SyncOrchestrator()
         result = await orchestrator.process_star_event(event, x_github_delivery)
+        decrement_active_syncs()
+        
+        # Record metrics
+        if result.get("status") == "success":
+            record_webhook_request("watch", "success")
+            record_sync_operation("success", result.get("duration_seconds", 0))
+        else:
+            record_webhook_request("watch", "already_synced")
 
         logger.info(
             "Webhook processed successfully",
