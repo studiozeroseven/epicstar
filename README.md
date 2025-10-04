@@ -1,122 +1,188 @@
 # GitHub-to-OneDev Sync Service
 
-An automated service that synchronizes starred GitHub repositories to a private OneDev Git instance.
+Automatically sync starred GitHub repositories to your private OneDev instance.
 
 ## Overview
 
-When you star a repository on GitHub, this service automatically:
-1. Receives a webhook notification from GitHub
-2. Fetches the repository metadata and clone URL
-3. Creates a new repository in your OneDev instance
-4. Clones the GitHub repository and pushes it to OneDev
-5. Tracks synchronization status and handles errors gracefully
+This service listens for GitHub star events via webhooks and automatically clones starred repositories to your OneDev Git server, creating a private backup of public repositories you find interesting.
 
-## Architecture
+## Features
 
-```
-GitHub (Star Event) → GitHub App Webhook → Middleware Service → OneDev API
-                                                ↓
-                                          Database (State)
-```
-
-### Components
-
-1. **GitHub App**: Subscribes to `watch` events and sends webhooks
-2. **Middleware Service**: FastAPI-based service that orchestrates the sync
-3. **OneDev Integration**: API client for repository creation and management
-4. **State Database**: Tracks synchronized repositories and status
-
-## Technology Stack
-
-- **Language**: Python 3.11+
-- **Web Framework**: FastAPI
-- **Database**: PostgreSQL (production) / SQLite (development)
-- **Containerization**: Podman
-- **GitHub Integration**: PyGithub + GitHub Webhooks
-- **OneDev Integration**: REST API client
-- **Testing**: pytest, pytest-asyncio, pytest-cov
-- **Monitoring**: Prometheus metrics (optional)
+- ✅ **Automatic Sync**: Star a repo on GitHub → Automatically cloned to OneDev
+- ✅ **Webhook-Driven**: Real-time synchronization using GitHub App webhooks
+- ✅ **Retry Logic**: Exponential backoff for failed operations
+- ✅ **Monitoring**: Prometheus metrics and health checks
+- ✅ **Database Tracking**: SQLite/PostgreSQL support for sync history
+- ✅ **Containerized**: Ready for Podman/Docker deployment
+- ✅ **Production-Ready**: Comprehensive logging, error handling, and testing
 
 ## Quick Start
 
 ### Prerequisites
 
 - Python 3.11+
-- Podman
-- GitHub account with admin access to create GitHub Apps
+- GitHub App (see [GitHub App Setup](docs/setup/github-app-setup.md))
 - OneDev instance with API access
+- Podman or Docker (for containerized deployment)
 
-### Local Development Setup
+### Installation
 
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone https://github.com/studiozeroseven/epicstar.git
 cd epicstar
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
-pip install -r requirements-dev.txt
 
-# Copy environment template
+# Configure environment
 cp .env.example .env
-
 # Edit .env with your credentials
-# See docs/setup/configuration.md for details
 
 # Run database migrations
 alembic upgrade head
 
-# Start the development server
-uvicorn app.main:app --reload
+# Start the service
+uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-### Production Deployment
+### Docker/Podman Deployment
 
 ```bash
-# Build the container
-podman build -t github-onedev-sync:latest .
-
-# Run with Podman Compose
+# Build and run with Podman Compose
 podman-compose up -d
 
 # Check logs
-podman logs -f github-onedev-sync
+podman-compose logs -f app
+
+# Health check
+curl http://localhost:8000/health
 ```
 
-See [docs/setup/deployment.md](docs/setup/deployment.md) for detailed deployment instructions.
+## Configuration
+
+Key environment variables:
+
+```env
+# GitHub App
+GITHUB_APP_ID=your_app_id
+GITHUB_WEBHOOK_SECRET=your_webhook_secret
+GITHUB_PRIVATE_KEY_PATH=/path/to/private-key.pem
+
+# OneDev
+ONEDEV_API_URL=https://your-onedev-instance.com
+ONEDEV_API_TOKEN=your_api_token
+
+# Database
+DATABASE_URL=sqlite:///./dev.db  # or postgresql://...
+```
+
+See [.env.example](.env.example) for all options.
 
 ## Documentation
 
-- [Architecture Overview](docs/architecture/overview.md)
-- [Setup Guide](docs/setup/README.md)
-  - [GitHub App Configuration](docs/setup/github-app-setup.md)
-  - [OneDev Configuration](docs/setup/onedev-configuration.md)
-  - [Deployment Guide](docs/setup/deployment.md)
-- [API Documentation](docs/api/README.md)
-- [Operations Guide](docs/operations/README.md)
-- [Development Guide](docs/development/README.md)
+- [Project Plan](docs/project-plan.md) - Complete development roadmap
+- [Architecture](docs/architecture.md) - System design and diagrams
+- [GitHub App Setup](docs/setup/github-app-setup.md) - Create and configure GitHub App
+- [OneDev Setup](docs/setup/onedev-setup.md) - Configure OneDev integration
+- [Deployment Guide](docs/deployment/podman-deployment.md) - Production deployment
+- [API Documentation](docs/api/webhook-api.md) - Webhook API reference
+- [Test Plan](docs/testing/test-plan.md) - Testing strategy
+
+## API Endpoints
+
+- `GET /` - Service information
+- `GET /health` - Health check with database status
+- `POST /webhooks/github` - GitHub webhook receiver
+- `GET /metrics` - Prometheus metrics
+- `GET /metrics/summary` - Human-readable metrics
+- `GET /docs` - Interactive API documentation (Swagger UI)
+
+## Development
+
+```bash
+# Install development dependencies
+pip install -r requirements-dev.txt
+
+# Run tests
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -c "import sys; sys.path.insert(0, '.'); import pytest; pytest.main(['tests/', '-v'])"
+
+# Run with auto-reload
+uvicorn app.main:app --reload
+
+# Format code
+black app/ tests/
+isort app/ tests/
+
+# Type checking
+mypy app/
+```
+
+## Architecture
+
+```
+┌─────────────┐      ┌──────────────────┐      ┌─────────────┐
+│   GitHub    │─────▶│  Sync Service    │─────▶│   OneDev    │
+│   (Star)    │      │  (FastAPI)       │      │   (Git)     │
+└─────────────┘      └──────────────────┘      └─────────────┘
+                             │
+                             ▼
+                     ┌──────────────┐
+                     │  PostgreSQL  │
+                     │  (Tracking)  │
+                     └──────────────┘
+```
+
+## Tech Stack
+
+- **Framework**: FastAPI
+- **Database**: SQLAlchemy (SQLite/PostgreSQL)
+- **Migrations**: Alembic
+- **Git Operations**: GitPython
+- **GitHub API**: PyGithub
+- **Async**: asyncio, aiohttp
+- **Monitoring**: Prometheus
+- **Testing**: pytest
+- **Containerization**: Podman/Docker
 
 ## Project Status
 
-This project follows a phased development approach. See [docs/project-plan.md](docs/project-plan.md) for the complete development roadmap.
+**Milestone 1 (M1): COMPLETE** ✅
 
-Current Phase: **Phase 0 - Project Setup**
+All 12 phases implemented:
+- ✅ Phase 0: Project Setup
+- ✅ Phase 1: Core Infrastructure
+- ✅ Phase 2: Database Layer
+- ✅ Phase 3: External Integrations
+- ✅ Phase 4: Business Logic
+- ✅ Phase 5: API Layer
+- ✅ Phase 6: Error Handling & Retry
+- ✅ Phase 7: Monitoring & Logging
+- ✅ Phase 8: Testing & QA
+- ✅ Phase 9: Documentation
+- ✅ Phase 10: Containerization
+- ✅ Phase 11: Deployment
+- ✅ Phase 12: Production Readiness
 
 ## Contributing
 
-See [docs/development/contributing.md](docs/development/contributing.md) for contribution guidelines.
+This is a personal project, but suggestions and feedback are welcome! Please open an issue to discuss proposed changes.
 
 ## License
 
-[Specify your license here]
+MIT License - See [LICENSE](LICENSE) for details.
+
+## Acknowledgments
+
+- Built with [FastAPI](https://fastapi.tiangolo.com/)
+- Inspired by the need for private backups of interesting open-source projects
+- OneDev integration for self-hosted Git management
 
 ## Support
 
-For issues and questions, please refer to:
-- [Troubleshooting Guide](docs/operations/troubleshooting.md)
-- [GitHub Issues](../../issues)
+For issues, questions, or feature requests, please open an issue on GitHub.
+
+---
+
+**Made with ❤️ for the open-source community**
 
