@@ -28,7 +28,7 @@ Fill in the following fields:
 
 | Field | Value | Notes |
 |-------|-------|-------|
-| **GitHub App name** | `github-onedev-sync` | Must be unique across GitHub |
+| **GitHub App name** | `epicstar` | Must be unique across GitHub |
 | **Description** | `Automatically sync starred repositories to OneDev` | Optional but recommended |
 | **Homepage URL** | `https://github.com/your-username/epicstar` | Your project repository |
 | **Webhook URL** | `https://your-domain.com/webhooks/github` | See Step 2 for testing URLs |

@@ -1,8 +1,8 @@
-# GitHub-to-OneDev Sync Service - Development Plan
+# epicstar - Development Plan
 
 ## Executive Summary
 
-This document outlines the comprehensive development plan for building an automated GitHub-to-OneDev repository synchronization service. The service will automatically clone starred GitHub repositories into a private OneDev Git instance.
+This document outlines the comprehensive development plan for building epicstar, an automated repository synchronization service. The service will automatically clone starred GitHub repositories into a private OneDev Git instance.
 
 **Project Duration**: Estimated 8-12 weeks (depending on team size and OneDev API complexity)
 
@@ -590,8 +590,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - run: podman build -t github-onedev-sync:${{ github.sha }} .
-      - run: trivy image github-onedev-sync:${{ github.sha }}
+      - run: podman build -t epicstar:${{ github.sha }} .
+      - run: trivy image epicstar:${{ github.sha }}
 ```
 
 **Deliverables**:
@@ -971,13 +971,13 @@ podman-compose -f docker-compose.staging.yml up -d
 **Deployment Steps**:
 ```bash
 # 1. Build container
-podman build -t github-onedev-sync:v1.0.0 .
+podman build -t epicstar:v1.0.0 .
 
 # 2. Tag for registry (optional)
-podman tag github-onedev-sync:v1.0.0 registry.example.com/github-onedev-sync:v1.0.0
+podman tag epicstar:v1.0.0 registry.example.com/epicstar:v1.0.0
 
 # 3. Push to registry (optional)
-podman push registry.example.com/github-onedev-sync:v1.0.0
+podman push registry.example.com/epicstar:v1.0.0
 
 # 4. Deploy with Podman Compose
 podman-compose up -d
@@ -986,7 +986,7 @@ podman-compose up -d
 curl http://localhost:8000/health
 
 # 6. Check logs
-podman logs -f github-onedev-sync
+podman logs -f epicstar
 ```
 
 ### Update Procedures
@@ -997,13 +997,13 @@ podman logs -f github-onedev-sync
 git pull origin main
 
 # 2. Build new image
-podman build -t github-onedev-sync:v1.1.0 .
+podman build -t epicstar:v1.1.0 .
 
 # 3. Run database migrations
-podman exec github-onedev-sync alembic upgrade head
+podman exec epicstar alembic upgrade head
 
 # 4. Update compose file with new version
-# Edit docker-compose.yml: image: github-onedev-sync:v1.1.0
+# Edit docker-compose.yml: image: epicstar:v1.1.0
 
 # 5. Recreate containers
 podman-compose up -d --force-recreate
@@ -1015,10 +1015,10 @@ curl http://localhost:8000/health
 **Rollback Procedure**:
 ```bash
 # 1. Revert to previous image version
-# Edit docker-compose.yml: image: github-onedev-sync:v1.0.0
+# Edit docker-compose.yml: image: epicstar:v1.0.0
 
 # 2. Rollback database (if needed)
-podman exec github-onedev-sync alembic downgrade -1
+podman exec epicstar alembic downgrade -1
 
 # 3. Recreate containers
 podman-compose up -d --force-recreate

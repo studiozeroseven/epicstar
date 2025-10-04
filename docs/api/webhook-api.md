@@ -2,7 +2,7 @@
 
 ## Overview
 
-The GitHub-to-OneDev Sync Service receives webhooks from GitHub when repositories are starred.
+The epicstar receives webhooks from GitHub when repositories are starred.
 
 ## Endpoints
 

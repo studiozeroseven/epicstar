@@ -1,4 +1,4 @@
-# GitHub-to-OneDev Sync Service
+# epicstar
 
 Automatically sync starred GitHub repositories to your private OneDev instance.
 

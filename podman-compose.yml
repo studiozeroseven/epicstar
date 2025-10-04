@@ -5,7 +5,7 @@ services:
     build:
       context: .
       dockerfile: Containerfile
-    container_name: github-onedev-sync
+    container_name: epicstar
     ports:
       - "8000:8000"
     environment:
@@ -44,7 +44,7 @@ services:
 
   db:
     image: docker.io/library/postgres:15-alpine
-    container_name: github-onedev-sync-db
+    container_name: epicstar-db
     environment:
       - POSTGRES_USER=${DB_USER:-syncuser}
       - POSTGRES_PASSWORD=${DB_PASSWORD:-syncpass}

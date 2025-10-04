@@ -1,4 +1,4 @@
-# Multi-stage Containerfile for GitHub-to-OneDev Sync Service
+# Multi-stage Containerfile for epicstar
 
 # Stage 1: Builder
 FROM python:3.11-slim AS builder

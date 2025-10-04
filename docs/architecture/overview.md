@@ -2,7 +2,7 @@
 
 ## System Architecture
 
-The GitHub-to-OneDev Sync Service is designed as a microservice-based architecture with clear separation of concerns and modular components.
+The epicstar is designed as a microservice-based architecture with clear separation of concerns and modular components.
 
 ## High-Level Architecture Diagram
 

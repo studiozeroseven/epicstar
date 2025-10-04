@@ -21,7 +21,7 @@ logger = get_logger(__name__)
 async def lifespan(app: FastAPI):
     """Application lifespan events."""
     # Startup
-    logger.info(f"Starting {settings.app_name} v{settings.app_version}")
+    logger.info(f"Starting epicstar v{settings.app_version}")
     logger.info(f"Environment: {settings.environment}")
 
     # Initialize database
@@ -38,7 +38,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
-    description="Automated GitHub-to-OneDev repository synchronization service",
+    description="Automatically sync starred GitHub repositories to your private OneDev instance",
     lifespan=lifespan,
 )
 

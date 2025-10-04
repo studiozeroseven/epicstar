@@ -1,8 +1,8 @@
-# Getting Started with GitHub-to-OneDev Sync Service
+# Getting Started with epicstar
 
 ## Welcome! 👋
 
-This guide will help you get started with the GitHub-to-OneDev Sync Service development. Follow these steps to set up your development environment and begin contributing.
+This guide will help you get started with the epicstar development. Follow these steps to set up your development environment and begin contributing.
 
 ## Prerequisites
 
@@ -297,21 +297,21 @@ pip install -r requirements-dev.txt
 
 ```bash
 # Build container
-podman build -t github-onedev-sync:dev .
+podman build -t epicstar:dev .
 
 # Run container
 podman run -d \
-  --name github-onedev-sync \
+  --name epicstar \
   -p 8000:8000 \
   --env-file .env \
-  github-onedev-sync:dev
+  epicstar:dev
 
 # View logs
-podman logs -f github-onedev-sync
+podman logs -f epicstar
 
 # Stop container
-podman stop github-onedev-sync
-podman rm github-onedev-sync
+podman stop epicstar
+podman rm epicstar
 ```
 
 ## Debugging

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Comprehensive testing strategy for the GitHub-to-OneDev Sync Service covering unit, integration, and end-to-end tests.
+Comprehensive testing strategy for the epicstar covering unit, integration, and end-to-end tests.
 
 ## Test Levels
 

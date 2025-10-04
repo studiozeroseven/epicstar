@@ -83,11 +83,11 @@ open http://localhost:8000/docs
 
 ### Using Systemd
 
-Create a systemd service file `/etc/systemd/system/github-onedev-sync.service`:
+Create a systemd service file `/etc/systemd/system/epicstar.service`:
 
 ```ini
 [Unit]
-Description=GitHub-to-OneDev Sync Service
+Description=epicstar
 After=network.target
 
 [Service]
@@ -106,8 +106,8 @@ Enable and start:
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable github-onedev-sync
-sudo systemctl start github-onedev-sync
+sudo systemctl enable epicstar
+sudo systemctl start epicstar
 ```
 
 ### Reverse Proxy (Nginx)
@@ -193,7 +193,7 @@ podman-compose logs app
 podman ps -a
 
 # Inspect container
-podman inspect github-onedev-sync
+podman inspect epicstar
 ```
 
 ### Database Connection Issues
@@ -221,13 +221,13 @@ sudo chmod 600 secrets/github-app-key.pem
 The container includes a built-in health check that runs every 30 seconds:
 
 ```bash
-podman inspect github-onedev-sync | grep -A 10 Health
+podman inspect epicstar | grep -A 10 Health
 ```
 
 ### Resource Usage
 
 ```bash
-podman stats github-onedev-sync
+podman stats epicstar
 ```
 
 ## Security Best Practices

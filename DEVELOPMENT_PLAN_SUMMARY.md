@@ -1,8 +1,8 @@
-# GitHub-to-OneDev Sync Service - Development Plan Summary
+# epicstar - Development Plan Summary
 
 ## Executive Summary
 
-This document provides a high-level overview of the comprehensive development plan for building an automated GitHub-to-OneDev repository synchronization service.
+This document provides a high-level overview of the comprehensive development plan for building epicstar.
 
 **Project Goal**: Automatically clone starred GitHub repositories to a private OneDev Git instance.
 

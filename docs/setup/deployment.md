@@ -2,7 +2,7 @@
 
 ## Overview
 
-This guide covers deploying the GitHub-to-OneDev Sync Service using Podman containers in development, staging, and production environments.
+This guide covers deploying the epicstar using Podman containers in development, staging, and production environments.
 
 ## Prerequisites
 
@@ -26,13 +26,13 @@ cp .env.example .env
 nano .env
 
 # Build container
-podman build -t github-onedev-sync:latest .
+podman build -t epicstar:latest .
 
 # Run with Podman Compose
 podman-compose up -d
 
 # Check logs
-podman logs -f github-onedev-sync
+podman logs -f epicstar
 
 # Verify health
 curl http://localhost:8000/health
@@ -48,7 +48,7 @@ Create a `.env` file with the following variables:
 # Application
 ENVIRONMENT=production  # development, staging, production
 LOG_LEVEL=INFO  # DEBUG, INFO, WARNING, ERROR, CRITICAL
-APP_NAME=github-onedev-sync
+APP_NAME=epicstar
 APP_VERSION=1.0.0
 
 # GitHub App Configuration
@@ -185,8 +185,8 @@ services:
     build:
       context: .
       dockerfile: Containerfile
-    image: github-onedev-sync:${VERSION:-latest}
-    container_name: github-onedev-sync
+    image: epicstar:${VERSION:-latest}
+    container_name: epicstar
     restart: unless-stopped
     ports:
       - "${APP_PORT:-8000}:8000"
@@ -216,7 +216,7 @@ services:
 
   db:
     image: postgres:15-alpine
-    container_name: github-onedev-sync-db
+    container_name: epicstar-db
     restart: unless-stopped
     environment:
       - POSTGRES_DB=${DB_NAME:-syncdb}
@@ -237,7 +237,7 @@ services:
   # Optional: Prometheus for monitoring
   prometheus:
     image: prom/prometheus:latest
-    container_name: github-onedev-sync-prometheus
+    container_name: epicstar-prometheus
     restart: unless-stopped
     ports:
       - "9090:9090"
@@ -252,7 +252,7 @@ services:
   # Optional: Grafana for dashboards
   grafana:
     image: grafana/grafana:latest
-    container_name: github-onedev-sync-grafana
+    container_name: epicstar-grafana
     restart: unless-stopped
     ports:
       - "3000:3000"
@@ -302,13 +302,13 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 export ENVIRONMENT=staging
 
 # Build with staging tag
-podman build -t github-onedev-sync:staging .
+podman build -t epicstar:staging .
 
 # Start all services
 podman-compose -f docker-compose.staging.yml up -d
 
 # Run database migrations
-podman exec github-onedev-sync alembic upgrade head
+podman exec epicstar alembic upgrade head
 
 # Verify
 curl https://staging.example.com/health
@@ -322,20 +322,20 @@ export ENVIRONMENT=production
 
 # Build with version tag
 export VERSION=1.0.0
-podman build -t github-onedev-sync:${VERSION} .
-podman tag github-onedev-sync:${VERSION} github-onedev-sync:latest
+podman build -t epicstar:${VERSION} .
+podman tag epicstar:${VERSION} epicstar:latest
 
 # Start all services
 podman-compose up -d
 
 # Run database migrations
-podman exec github-onedev-sync alembic upgrade head
+podman exec epicstar alembic upgrade head
 
 # Verify health
 curl https://sync.example.com/health
 
 # Check logs
-podman logs -f github-onedev-sync
+podman logs -f epicstar
 
 # Monitor metrics
 curl https://sync.example.com/metrics
@@ -346,7 +346,7 @@ curl https://sync.example.com/metrics
 ### Nginx
 
 ```nginx
-# /etc/nginx/sites-available/github-onedev-sync
+# /etc/nginx/sites-available/epicstar
 upstream sync_backend {
     server localhost:8000;
 }
@@ -441,16 +441,16 @@ git pull origin main
 
 # 2. Build new image with version tag
 export NEW_VERSION=1.1.0
-podman build -t github-onedev-sync:${NEW_VERSION} .
+podman build -t epicstar:${NEW_VERSION} .
 
 # 3. Backup database
-podman exec github-onedev-sync-db pg_dump -U syncuser syncdb > backup_$(date +%Y%m%d).sql
+podman exec epicstar-db pg_dump -U syncuser syncdb > backup_$(date +%Y%m%d).sql
 
 # 4. Run database migrations (if any)
 podman run --rm \
   --network sync-network \
   -e DATABASE_URL=postgresql://syncuser:password@db:5432/syncdb \
-  github-onedev-sync:${NEW_VERSION} \
+  epicstar:${NEW_VERSION} \
   alembic upgrade head
 
 # 5. Update docker-compose.yml with new version
@@ -463,10 +463,10 @@ podman-compose up -d --force-recreate app
 curl https://sync.example.com/health
 
 # 8. Monitor logs for errors
-podman logs -f github-onedev-sync --since 5m
+podman logs -f epicstar --since 5m
 
 # 9. If successful, tag as latest
-podman tag github-onedev-sync:${NEW_VERSION} github-onedev-sync:latest
+podman tag epicstar:${NEW_VERSION} epicstar:latest
 ```
 
 ### Rollback Procedure
@@ -479,7 +479,7 @@ export PREVIOUS_VERSION=1.0.0
 sed -i "s/VERSION=.*/VERSION=${PREVIOUS_VERSION}/" .env
 
 # 3. Rollback database (if needed)
-podman exec -i github-onedev-sync-db psql -U syncuser syncdb < backup_20251004.sql
+podman exec -i epicstar-db psql -U syncuser syncdb < backup_20251004.sql
 
 # 4. Recreate containers with previous version
 podman-compose up -d --force-recreate app
@@ -500,41 +500,41 @@ curl https://sync.example.com/health
 # {"status": "healthy", "database": "connected", "version": "1.0.0"}
 
 # Database health
-podman exec github-onedev-sync-db pg_isready -U syncuser
+podman exec epicstar-db pg_isready -U syncuser
 
 # Container status
 podman ps
-podman stats github-onedev-sync
+podman stats epicstar
 ```
 
 ### Log Management
 
 ```bash
 # View logs
-podman logs github-onedev-sync
-podman logs github-onedev-sync-db
+podman logs epicstar
+podman logs epicstar-db
 
 # Follow logs
-podman logs -f github-onedev-sync
+podman logs -f epicstar
 
 # Filter logs by level
-podman logs github-onedev-sync 2>&1 | grep ERROR
+podman logs epicstar 2>&1 | grep ERROR
 
 # Export logs
-podman logs github-onedev-sync > app.log 2>&1
+podman logs epicstar > app.log 2>&1
 ```
 
 ### Database Backup
 
 ```bash
 # Manual backup
-podman exec github-onedev-sync-db pg_dump -U syncuser syncdb > backup.sql
+podman exec epicstar-db pg_dump -U syncuser syncdb > backup.sql
 
 # Automated daily backup (cron)
-0 2 * * * podman exec github-onedev-sync-db pg_dump -U syncuser syncdb > /backups/syncdb_$(date +\%Y\%m\%d).sql
+0 2 * * * podman exec epicstar-db pg_dump -U syncuser syncdb > /backups/syncdb_$(date +\%Y\%m\%d).sql
 
 # Restore from backup
-podman exec -i github-onedev-sync-db psql -U syncuser syncdb < backup.sql
+podman exec -i epicstar-db psql -U syncuser syncdb < backup.sql
 ```
 
 ## Troubleshooting
@@ -543,20 +543,20 @@ podman exec -i github-onedev-sync-db psql -U syncuser syncdb < backup.sql
 
 ```bash
 # Check logs
-podman logs github-onedev-sync
+podman logs epicstar
 
 # Check environment variables
-podman exec github-onedev-sync env
+podman exec epicstar env
 
 # Verify configuration
-podman exec github-onedev-sync python -c "from app.config import settings; print(settings)"
+podman exec epicstar python -c "from app.config import settings; print(settings)"
 ```
 
 ### Database connection issues
 
 ```bash
 # Test database connection
-podman exec github-onedev-sync-db psql -U syncuser -d syncdb -c "SELECT 1;"
+podman exec epicstar-db psql -U syncuser -d syncdb -c "SELECT 1;"
 
 # Check network
 podman network inspect sync-network
@@ -569,7 +569,7 @@ echo $DATABASE_URL
 
 ```bash
 # Check if port is exposed
-podman port github-onedev-sync
+podman port epicstar
 
 # Test webhook endpoint
 curl -X POST http://localhost:8000/webhooks/github \

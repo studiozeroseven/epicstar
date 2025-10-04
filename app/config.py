@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     # Application
     environment: str = Field(default="development")
     log_level: str = Field(default="INFO")
-    app_name: str = Field(default="github-onedev-sync")
+    app_name: str = Field(default="epicstar")
     app_version: str = Field(default="0.1.0")
     app_port: int = Field(default=8000)
 

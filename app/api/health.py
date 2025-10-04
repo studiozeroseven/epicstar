@@ -42,7 +42,7 @@ async def health_check() -> Dict[str, str]:
 async def root() -> Dict[str, str]:
     """Root endpoint."""
     return {
-        "service": settings.app_name,
+        "service": "epicstar",
         "version": settings.app_version,
         "docs": "/docs",
         "health": "/health",

@@ -3,9 +3,9 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "github-onedev-sync"
+name = "epicstar"
 version = "0.1.0"
-description = "Automated GitHub-to-OneDev repository synchronization service"
+description = "Automatically sync starred GitHub repositories to your private OneDev instance"
 readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "MIT"}
