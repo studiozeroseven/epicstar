@@ -179,7 +179,7 @@ backups/
 .vscode/
 *.code-workspace
 
-# PyCharm
+# PyCharm / IntelliJ IDEA
 .idea/
 *.iml
 *.iws
