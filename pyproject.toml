@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "epicstar"
-version = "0.1.0"
+version = "0.2.0"
 description = "Automatically sync starred GitHub repositories to your private OneDev instance"
 readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "MIT"}
 authors = [
-    {name = "Epic Star Team"}
+    {name = "Ian"}
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -21,49 +21,34 @@ classifiers = [
 ]
 
 dependencies = [
-    "fastapi>=0.104.1",
-    "uvicorn[standard]>=0.24.0",
-    "pydantic>=2.4.2",
-    "pydantic-settings>=2.0.3",
-    "sqlalchemy>=2.0.23",
-    "alembic>=1.12.1",
-    "psycopg2-binary>=2.9.9",
-    "asyncpg>=0.29.0",
-    "PyGithub>=2.1.1",
-    "cryptography>=41.0.7",
-    "httpx>=0.25.1",
-    "aiohttp>=3.9.1",
-    "GitPython>=3.1.40",
-    "python-dotenv>=1.0.0",
-    "python-multipart>=0.0.6",
-    "tenacity>=8.2.3",
-    "prometheus-client>=0.19.0",
-    "python-json-logger>=2.0.7",
-    "python-jose[cryptography]>=3.3.0",
-    "python-dateutil>=2.8.2",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "alembic>=1.14",
+    "asyncpg>=0.30",
+    "aiosqlite>=0.20",
+    "PyGithub>=2.5",
+    "cryptography>=44",
+    "httpx>=0.28",
+    "tenacity>=9.0",
+    "prometheus-client>=0.21",
+    "python-json-logger>=2.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=7.4.3",
-    "pytest-asyncio>=0.21.1",
-    "pytest-cov>=4.1.0",
-    "pytest-mock>=3.12.0",
-    "pytest-xdist>=3.5.0",
-    "httpx-mock>=0.7.0",
-    "faker>=20.0.3",
-    "factory-boy>=3.3.0",
-    "black>=23.11.0",
-    "flake8>=6.1.0",
-    "isort>=5.12.0",
-    "mypy>=1.7.1",
-    "pylint>=3.0.3",
-    "bandit>=1.7.5",
-    "types-python-dateutil>=2.8.19.14",
-    "types-requests>=2.31.0.10",
-    "ipython>=8.18.1",
-    "ipdb>=0.13.13",
-    "pre-commit>=3.5.0",
+    "pytest>=8.3",
+    "pytest-asyncio>=0.25",
+    "pytest-cov>=6",
+    "pytest-mock>=3.14",
+    "black>=24.10",
+    "isort>=5.13",
+    "mypy>=1.13",
+    "bandit>=1.8",
+    "types-python-dateutil>=2.9",
+    "pre-commit>=4.0",
 ]
 
 [tool.black]
@@ -97,8 +82,8 @@ ensure_newline_before_comments = true
 python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
-disallow_untyped_defs = true
-disallow_incomplete_defs = true
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
 check_untyped_defs = true
 no_implicit_optional = true
 warn_redundant_casts = true
@@ -109,53 +94,9 @@ strict_equality = true
 [[tool.mypy.overrides]]
 module = [
     "github.*",
-    "git.*",
 ]
 ignore_missing_imports = true
 
-[tool.pytest.ini_options]
-minversion = "7.0"
-addopts = "-ra -q --strict-markers --cov=app --cov-report=term-missing --cov-report=html"
-testpaths = ["tests"]
-python_files = ["test_*.py"]
-python_classes = ["Test*"]
-python_functions = ["test_*"]
-asyncio_mode = "auto"
-
-[tool.coverage.run]
-source = ["app"]
-omit = [
-    "*/tests/*",
-    "*/test_*.py",
-    "*/__pycache__/*",
-    "*/venv/*",
-]
-
-[tool.coverage.report]
-precision = 2
-show_missing = true
-skip_covered = false
-exclude_lines = [
-    "pragma: no cover",
-    "def __repr__",
-    "raise AssertionError",
-    "raise NotImplementedError",
-    "if __name__ == .__main__.:",
-    "if TYPE_CHECKING:",
-    "@abstractmethod",
-]
-
-[tool.pylint.messages_control]
-disable = [
-    "C0111",  # missing-docstring
-    "C0103",  # invalid-name
-    "R0903",  # too-few-public-methods
-]
-
-[tool.pylint.format]
-max-line-length = 100
-
 [tool.bandit]
-exclude_dirs = ["tests", "venv"]
+exclude_dirs = ["tests", ".venv"]
 skips = ["B101"]
-

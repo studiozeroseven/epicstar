@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class RepositoryOwner(BaseModel):
@@ -45,10 +45,8 @@ class WatchEvent(BaseModel):
 class WebhookHeaders(BaseModel):
     """GitHub webhook headers."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     event: str = Field(alias="x-github-event")
     delivery: str = Field(alias="x-github-delivery")
     signature: Optional[str] = Field(default=None, alias="x-hub-signature-256")
-
-    class Config:
-        populate_by_name = True
-

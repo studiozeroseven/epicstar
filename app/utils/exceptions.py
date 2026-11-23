@@ -36,6 +36,7 @@ class DatabaseError(SyncServiceException):
 
     pass
 
+
 class RetryableError(SyncServiceException):
     """Retryable error - operation can be retried."""
 

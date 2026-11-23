@@ -1,151 +1,80 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+All notable changes to this project are documented in this file.
+Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [0.2.0] - 2026-11-23
 
-## [0.1.0] - 2025-10-04
+Re-verified every external integration against real OneDev behaviour and
+reworked the core so the service actually works; previous claims of
+"production-ready" were false.
+
+### Fixed
+
+- **OneDev REST base path**: `/api` never existed (404); client now uses
+  `~api` (e.g. `GET {server}/~api/projects`) - verified against a live server.
+- **OneDev authentication**: Bearer tokens are rejected (401); REST and git
+  calls now use HTTP Basic with `ONEDEV_USERNAME` + `ONEDEV_API_TOKEN`
+  (new required setting).
+- **Create-project payload**: OneDev rejects projects without
+  `gitPackConfig`/`codeIndexingSetting`; payload now includes them and parses
+  the plain-text integer id OneDev returns (not JSON).
+- **Git URL auth**: token-only / `oauth2:` URL forms fail; the client embeds
+  the percent-encoded username + token (`https://user:token@host/project.git`)
+  and redacts credentials in every log line.
+- **Containerfile/compose port mismatch**: image listened on 5000 while
+  compose mapped 8000; both now use 8000 (and `app.port`).
+- **`starred_at` crash**: timezone-aware `datetime` values are stored as JSON
+  strings via `model_dump(mode="json")` instead of raising `TypeError` on
+  every real webhook payload.
+- **Whole-flow retry trap**: a failed attempt could later resurface as
+  `already_synced`. Retries are now per-step (OneDev API / git) and the repo
+  row is reset to `in_progress` on re-star; a failed star is retried on the
+  next star event.
+- **Duplicate projects**: creation is now preceded by a paginated
+  name lookup (`offset`/`count`) so `use_existing` actually adopts the
+  existing project.
+
+### Changed
+
+- **Webhook receiver returns `202 Accepted` immediately** and syncs in a
+  background task instead of blocking the HTTP response for the entire
+  clone+push (GitHub aborts webhooks at ~10s).
+- **GitPython removed**: git operations run via the `git` CLI with enforced
+  subprocess timeouts (GitPython has no timeout support); large-file CVE
+  exposure drops as a side effect.
+- **Naive UTC datetimes** at every database boundary (asyncpg rejects tz-aware
+  values into naive columns).
+- **Dependency floors raised and unused deps removed** (`aiohttp`,
+  `python-jose`, `python-dateutil`, `python-multipart`, `psycopg2-binary`,
+  `GitPython`, `PyGithub`-only-what's-needed); `aiosqlite` added because the
+  documented default `sqlite:///./dev.db` needs it.
+- **Metrics are real** (prometheus_client counters/gauges/histograms backed by
+  DB state); removed the hardcoded summary values.
+- **Config system** moved to pydantic-settings with fail-fast validation for
+  missing GitHub App credentials and CORS list parsing.
 
 ### Added
 
-#### Phase 0: Project Setup
-- Initial project structure with Python package configuration
-- Git repository initialization with dual remote setup (OneDev + GitHub)
-- Development environment configuration
-- Pre-commit hooks for code quality
-- Comprehensive project documentation
+- Working async SQLAlchemy 2.0 engine with URL normalization
+  (`postgres://`/`postgresql://` -> `postgresql+asyncpg://`,
+  sqlite -> `sqlite+aiosqlite://`).
+- Retry configuration exposed via settings (`MAX_RETRIES`, `RETRY_*`).
+- `/metrics/summary` reads real repository/sync-log state.
+- Test suite: 53 tests (unit + integration, async webhook flow with fake
+  OneDev/git) - the previous suite could not even collect on a clean checkout.
+- `requirements-dev.txt` aligned with the CI toolchain (pytest 8, pytest-asyncio,
+  black, isort, mypy, bandit).
+- GitHub Actions CI (test matrix, lint).
 
-#### Phase 1: Core Infrastructure
-- Configuration management using Pydantic Settings
-- JSON logging with custom formatter
-- GitHub webhook signature verification (HMAC-SHA256)
-- Custom exception hierarchy
-- Environment variable loading from .env files
+### Removed
 
-#### Phase 2: Database Layer
-- SQLAlchemy models for repositories, sync logs, and webhook events
-- Async/sync database session management
-- Support for both SQLite (development) and PostgreSQL (production)
-- CRUD operations for all models
-- Alembic migrations setup
-- Initial database schema migration
+- Root-level AI process files (`BUILD_COMPLETE_SUMMARY.md`,
+  `M1_COMPLETION_REPORT.md`, `SETUP_COMPLETE.md`, etc.) that documented
+  milestones rather than the product, with false completion claims.
+- Stale docs (`docs/project-plan.md`, `docs/use-cases/basic-sync.md`,
+  `docs/architecture/overview.md`) describing the pre-fix architecture.
 
-#### Phase 3: External Integrations
-- GitHub API client using PyGithub
-- OneDev API client with HTTP requests
-- Repository creation and management
-- API authentication and error handling
+## [0.1.0]
 
-#### Phase 4: Business Logic
-- Git operations service (clone, push, sync)
-- Sync orchestrator for webhook processing
-- Repository synchronization workflow
-- Temporary directory management for git operations
-
-#### Phase 5: API Layer
-- FastAPI application with lifespan management
-- Health check endpoints with database status
-- Root endpoint with service information
-- GitHub webhook receiver endpoint
-- Request/response validation
-- Interactive API documentation (Swagger UI)
-
-#### Phase 6: Error Handling & Retry Logic
-- Exponential backoff retry mechanism using tenacity
-- Configurable retry parameters (max attempts, wait times)
-- Retry decorator for async functions
-- Retryable error classification
-- Integration with sync orchestrator
-
-#### Phase 7: Monitoring & Logging
-- Prometheus metrics endpoint
-- Metrics for webhook requests, sync operations, duration
-- Active syncs gauge
-- Database health monitoring
-- Human-readable metrics summary endpoint
-- Structured JSON logging
-
-#### Phase 8: Testing & Quality Assurance
-- Unit tests for configuration and security
-- Integration tests for API endpoints
-- Test fixtures for database sessions
-- Pytest configuration with langsmith plugin disabled
-- 12 passing tests with >80% coverage
-- Test documentation and guidelines
-
-#### Phase 9: Documentation
-- Comprehensive README with quick start guide
-- Project plan with 12-phase roadmap
-- Architecture documentation with diagrams
-- GitHub App setup guide
-- OneDev setup guide
-- Deployment guide for Podman
-- API documentation for webhooks
-- Test plan and strategy
-- Database schema documentation
-- Use case documentation
-
-#### Phase 10: Containerization
-- Multi-stage Containerfile for optimized builds
-- Podman Compose configuration
-- PostgreSQL database container
-- Volume management for git operations
-- Health checks for containers
-- .containerignore for efficient builds
-- Non-root user for security
-
-#### Phase 11: Deployment
-- Systemd service configuration
-- Nginx reverse proxy setup
-- SSL/TLS configuration guide
-- Backup and restore procedures
-- Monitoring and logging setup
-- Resource usage optimization
-
-#### Phase 12: Production Readiness
-- Environment-specific configurations
-- Security best practices documentation
-- Performance tuning guidelines
-- Troubleshooting guide
-- Maintenance procedures
-- Scaling recommendations
-
-### Changed
-- Updated database.py to support async SQLite with aiosqlite
-- Fixed JSON logging formatter timestamp handling
-- Updated pytest configuration to disable incompatible plugins
-- Improved type hints in metrics module
-
-### Fixed
-- AsyncSessionLocal export issue in database module
-- JSON logging KeyError for 'asctime' field
-- Type hint error in metrics endpoint (any → Any)
-- Test configuration for environments with .env file
-- Pytest compatibility with langsmith plugin
-
-### Security
-- GitHub webhook signature verification
-- Secrets management best practices
-- Non-root container user
-- Environment variable protection
-- .gitignore for sensitive files
-
-## [Unreleased]
-
-### Planned
-- Background job queue for long-running syncs
-- Web UI for repository management
-- Multi-user support with authentication
-- Repository filtering and selection
-- Sync scheduling and automation
-- Advanced metrics and dashboards
-- Integration with other Git platforms
-- Webhook replay functionality
-- Rate limiting and throttling
-- Advanced error recovery
-
----
-
-[0.1.0]: https://github.com/studiozeroseven/epicstar/releases/tag/v0.1.0
-
+Initial attempt. Looked complete, was not.

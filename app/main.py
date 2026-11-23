@@ -6,11 +6,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.health import router as health_router
-from app.api.webhooks import router as webhook_router
 from app.api.metrics import router as metrics_router
+from app.api.webhooks import router as webhook_router
 from app.config import settings
 from app.core.logging import get_logger, setup_logging
-from app.db.database import init_db
+from app.db.database import dispose_db, init_db
 
 # Setup logging
 setup_logging()
@@ -31,6 +31,7 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown
+    await dispose_db()
     logger.info("Shutting down application")
 
 
@@ -42,13 +43,12 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS middleware
+# CORS middleware (opt-in; origins must be listed explicitly)
 if settings.cors_enabled:
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
+        allow_origins=settings.cors_origins or ["*"],
+        allow_methods=["GET", "POST"],
         allow_headers=["*"],
     )
 
@@ -62,9 +62,8 @@ if __name__ == "__main__":
 
     uvicorn.run(
         "app.main:app",
-        host="0.0.0.0",
+        host="0.0.0.0",  # nosec B104 - container/webhook service must bind all IFs
         port=settings.app_port,
         reload=settings.environment == "development",
         log_level=settings.log_level.lower(),
     )
-

@@ -1,6 +1,6 @@
 """CRUD operations for database models."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 from sqlalchemy import select
@@ -11,6 +11,11 @@ from app.core.logging import get_logger
 from app.db.models import Repository, SyncLog, WebhookEvent
 
 logger = get_logger(__name__)
+
+
+def _naive_utcnow() -> datetime:
+    """Naive UTC timestamp (asyncpg rejects tz-aware values into naive columns)."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class RepositoryCRUD:
@@ -42,7 +47,9 @@ class RepositoryCRUD:
     @staticmethod
     async def get_by_github_url(session: AsyncSession, github_url: str) -> Optional[Repository]:
         """Get repository by GitHub URL."""
-        result = await session.execute(select(Repository).where(Repository.github_url == github_url))
+        result = await session.execute(
+            select(Repository).where(Repository.github_url == github_url)
+        )
         return result.scalar_one_or_none()
 
     @staticmethod
@@ -62,9 +69,9 @@ class RepositoryCRUD:
         """Update repository sync status."""
         repo = await RepositoryCRUD.get_by_id(session, repo_id)
         if repo:
-            repo.sync_status = status
-            repo.error_message = error_message
-            repo.updated_at = datetime.utcnow()
+            repo.sync_status = status  # type: ignore[assignment]
+            repo.error_message = error_message  # type: ignore[assignment]
+            repo.updated_at = _naive_utcnow()  # type: ignore[assignment]
 
             for key, value in kwargs.items():
                 if hasattr(repo, key):
@@ -80,8 +87,8 @@ class RepositoryCRUD:
         """Increment retry count."""
         repo = await RepositoryCRUD.get_by_id(session, repo_id)
         if repo:
-            repo.retry_count += 1
-            repo.updated_at = datetime.utcnow()
+            repo.retry_count += 1  # type: ignore[assignment]
+            repo.updated_at = _naive_utcnow()  # type: ignore[assignment]
             await session.flush()
             await session.refresh(repo)
         return repo
@@ -162,11 +169,10 @@ class WebhookEventCRUD:
         )
         event = result.scalar_one_or_none()
         if event:
-            event.processed = True
-            event.processed_at = datetime.utcnow()
-            event.repository_id = repository_id
-            event.processing_error = error
+            event.processed = True  # type: ignore[assignment]
+            event.processed_at = _naive_utcnow()  # type: ignore[assignment]
+            event.repository_id = repository_id  # type: ignore[assignment]
+            event.processing_error = error  # type: ignore[assignment]
             await session.flush()
             await session.refresh(event)
         return event
-

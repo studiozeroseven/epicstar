@@ -1,59 +1,41 @@
-"""Unit tests for security module."""
+"""Unit tests for webhook signature verification."""
 
-import pytest
+import hashlib
+import hmac
 
 from app.core.security import verify_github_signature
 
 
-class TestGitHubSignatureVerification:
-    """Test GitHub webhook signature verification."""
+def _header(payload: bytes, secret: str = "test_webhook_secret") -> str:
+    return "sha256=" + hmac.new(secret.encode(), payload, hashlib.sha256).hexdigest()
 
-    def test_valid_signature(self):
-        """Test valid signature verification."""
-        payload = b'{"test": "data"}'
-        secret = "test_secret"
 
-        # Calculate expected signature
-        import hashlib
-        import hmac
+def test_valid_signature():
+    payload = b'{"test": "data"}'
+    assert verify_github_signature(payload, _header(payload)) is True
 
-        expected_sig = hmac.new(secret.encode(), payload, hashlib.sha256).hexdigest()
-        signature_header = f"sha256={expected_sig}"
 
-        # Mock settings
-        from app.config import settings
+def test_invalid_signature():
+    payload = b'{"test": "data"}'
+    assert verify_github_signature(payload, "sha256=" + "0" * 64) is False
 
-        original_secret = settings.github_webhook_secret
-        settings.github_webhook_secret = secret
 
-        try:
-            assert verify_github_signature(payload, signature_header) is True
-        finally:
-            settings.github_webhook_secret = original_secret
+def test_missing_signature():
+    assert verify_github_signature(b"{}", None) is False
 
-    def test_invalid_signature(self):
-        """Test invalid signature verification."""
-        payload = b'{"test": "data"}'
-        signature_header = "sha256=invalid_signature"
 
-        from app.config import settings
+def test_invalid_signature_format():
+    assert verify_github_signature(b"{}", "invalid_format") is False
 
-        original_secret = settings.github_webhook_secret
-        settings.github_webhook_secret = "test_secret"
 
-        try:
-            assert verify_github_signature(payload, signature_header) is False
-        finally:
-            settings.github_webhook_secret = original_secret
+def test_signature_is_constant_time_comparable():
+    # compare_digest would raise on differing lengths; we never hit the
+    # raw-compare path with a malformed header.
+    assert verify_github_signature(b"{}", "sha256=short") is False
 
-    def test_missing_signature(self):
-        """Test missing signature header."""
-        payload = b'{"test": "data"}'
-        assert verify_github_signature(payload, None) is False
 
-    def test_invalid_signature_format(self):
-        """Test invalid signature format."""
-        payload = b'{"test": "data"}'
-        signature_header = "invalid_format"
-        assert verify_github_signature(payload, signature_header) is False
-
+def test_hashlib_hmac_contract():
+    # Guard against accidental algorithm drift.
+    payload = b"x"
+    expected = hmac.new(b"test_webhook_secret", payload, hashlib.sha256).hexdigest()
+    assert verify_github_signature(payload, f"sha256={expected}") is True

@@ -10,9 +10,12 @@ from prometheus_client import (
     Histogram,
     generate_latest,
 )
+from sqlalchemy import func, select
+from sqlalchemy.engine import Result
 from starlette.responses import Response
 
-from app.db.database import get_db_health
+from app.db.database import AsyncSessionLocal, get_db_health
+from app.db.models import Repository
 
 router = APIRouter()
 
@@ -51,58 +54,48 @@ database_health = Gauge(
 )
 
 
+async def _repository_status_counts() -> Dict[str, int]:
+    """Count repositories grouped by sync status."""
+    async with AsyncSessionLocal() as session:
+        result: Result = await session.execute(
+            select(Repository.sync_status, func.count()).group_by(Repository.sync_status)
+        )
+    return dict(result.all())
+
+
 @router.get("/metrics")
 async def metrics() -> Response:
-    """
-    Prometheus metrics endpoint.
-    
-    Returns metrics in Prometheus text format.
-    """
-    # Update database health metric
+    """Prometheus metrics endpoint (Prometheus text format)."""
     db_status = await get_db_health()
     database_health.set(1 if db_status == "connected" else 0)
-    
-    # Generate metrics
-    metrics_data = generate_latest()
-    
+
+    counts = await _repository_status_counts()
+    repository_count.set(sum(counts.values()))
+
     return Response(
-        content=metrics_data,
+        content=generate_latest(),
         media_type=CONTENT_TYPE_LATEST,
     )
 
 
 @router.get("/metrics/summary")
 async def metrics_summary() -> Dict[str, Any]:
-    """
-    Human-readable metrics summary.
-    
-    Returns a JSON summary of key metrics.
-    """
-    from app.db.crud import RepositoryCRUD
-    from app.db.database import AsyncSessionLocal
-    
-    async with AsyncSessionLocal() as session:
-        repo_crud = RepositoryCRUD(session)
-        
-        # Count repositories by status
-        # Note: This is a simplified version. In production, add proper count methods to CRUD
-        total_repos = 0  # Would query: SELECT COUNT(*) FROM repositories
-        completed_repos = 0  # Would query: SELECT COUNT(*) FROM repositories WHERE status='completed'
-        failed_repos = 0  # Would query: SELECT COUNT(*) FROM repositories WHERE status='failed'
-        pending_repos = 0  # Would query: SELECT COUNT(*) FROM repositories WHERE status='pending'
-    
+    """Human-readable JSON summary of key metrics."""
     db_status = await get_db_health()
-    
+    counts = await _repository_status_counts()
+
     return {
         "database": {
             "status": db_status,
             "healthy": db_status == "connected",
         },
         "repositories": {
-            "total": total_repos,
-            "completed": completed_repos,
-            "failed": failed_repos,
-            "pending": pending_repos,
+            "total": sum(counts.values()),
+            "completed": counts.get("completed", 0),
+            "failed": counts.get("failed", 0),
+            "pending": counts.get("pending", 0),
+            "in_progress": counts.get("in_progress", 0),
+            "cloning": counts.get("cloning", 0),
         },
         "sync_operations": {
             "active": int(active_syncs._value.get()),
@@ -122,16 +115,16 @@ def record_sync_operation(status: str, duration: float) -> None:
 
 
 def increment_active_syncs() -> None:
-    """Increment active syncs counter."""
+    """Increment active syncs gauge."""
     active_syncs.inc()
 
 
 def decrement_active_syncs() -> None:
-    """Decrement active syncs counter."""
-    active_syncs.dec()
+    """Decrement active syncs gauge, flooring at 0."""
+    if active_syncs._value.get() > 0:
+        active_syncs.dec()
 
 
 def set_repository_count(count: int) -> None:
     """Set repository count gauge."""
     repository_count.set(count)
-

@@ -1,25 +1,35 @@
-"""Webhook endpoints."""
+"""Webhook endpoints.
 
+GitHub expects webhook handlers to answer quickly (<10s) or it treats the
+delivery as timed out and redelivers. Syncs can run for minutes, so this
+endpoint validates, records, and QUEUES the sync as a background task,
+returning 202 immediately. Results land in the database (repositories /
+sync_logs / webhook_events) and metrics.
+"""
+
+import asyncio
 import json
-from typing import Dict
+from typing import Dict, Optional, Set
 
 from fastapi import APIRouter, Header, Request, status
 from fastapi.responses import JSONResponse
 
+from app.api.metrics import (
+    decrement_active_syncs,
+    increment_active_syncs,
+    record_sync_operation,
+    record_webhook_request,
+)
 from app.core.logging import get_logger
 from app.core.security import verify_github_signature
 from app.models.webhook import WatchEvent
 from app.services.sync_orchestrator import SyncOrchestrator
-from app.api.metrics import (
-    record_webhook_request,
-    record_sync_operation,
-    increment_active_syncs,
-    decrement_active_syncs,
-)
-from app.utils.exceptions import WebhookValidationError
 
 router = APIRouter()
 logger = get_logger(__name__)
+
+# Keep references to background tasks so they are not garbage-collected mid-run.
+_background_tasks: Set[asyncio.Task] = set()
 
 
 @router.post("/webhooks/github", status_code=status.HTTP_200_OK)
@@ -27,21 +37,9 @@ async def github_webhook(
     request: Request,
     x_github_event: str = Header(..., alias="X-GitHub-Event"),
     x_github_delivery: str = Header(..., alias="X-GitHub-Delivery"),
-    x_hub_signature_256: str = Header(None, alias="X-Hub-Signature-256"),
-) -> Dict[str, str]:
-    """
-    GitHub webhook endpoint.
-
-    Args:
-        request: FastAPI request object
-        x_github_event: GitHub event type
-        x_github_delivery: Delivery ID
-        x_hub_signature_256: Webhook signature
-
-    Returns:
-        Success response
-    """
-    # Get raw body for signature verification
+    x_hub_signature_256: Optional[str] = Header(None, alias="X-Hub-Signature-256"),
+) -> JSONResponse:
+    """Receive (and queue) GitHub webhook events."""
     body = await request.body()
 
     # Verify signature
@@ -73,7 +71,7 @@ async def github_webhook(
         extra={
             "event": x_github_event,
             "delivery_id": x_github_delivery,
-            "action": payload.get("action"),
+            "action": payload.get("action") if isinstance(payload, dict) else None,
         },
     )
 
@@ -83,7 +81,10 @@ async def github_webhook(
             "Ignoring non-watch event",
             extra={"event": x_github_event, "delivery_id": x_github_delivery},
         )
-        return {"status": "ignored", "reason": "not a watch event"}
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={"status": "ignored", "reason": "not a watch event"},
+        )
 
     # Validate and parse watch event
     try:
@@ -104,44 +105,62 @@ async def github_webhook(
             "Ignoring non-started action",
             extra={"action": event.action, "delivery_id": x_github_delivery},
         )
-        return {"status": "ignored", "reason": f"action is {event.action}, not started"}
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={"status": "ignored", "reason": f"action is {event.action}, not started"},
+        )
 
-    # Process the sync
+    record_webhook_request("watch", "received")
+
+    # Queue the sync as a background task; respond immediately.
+    task = asyncio.create_task(
+        _run_sync_safely(event, x_github_delivery, event.repository.full_name)
+    )
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+
+    return JSONResponse(
+        status_code=status.HTTP_202_ACCEPTED,
+        content={
+            "status": "queued",
+            "delivery_id": x_github_delivery,
+            "repository": event.repository.full_name,
+        },
+    )
+
+
+async def _run_sync_safely(event: WatchEvent, delivery_id: str, full_name: str) -> None:
+    """Run one sync, recording metrics; never raises."""
+    increment_active_syncs()
     try:
-        increment_active_syncs()
-        orchestrator = SyncOrchestrator()
-        result = await orchestrator.process_star_event(event, x_github_delivery)
-        decrement_active_syncs()
-        
-        # Record metrics
-        if result.get("status") == "success":
+        try:
+            orchestrator = SyncOrchestrator()
+            result = await orchestrator.process_star_event(event, delivery_id)
+        except Exception:
+            logger.exception(
+                "Unexpected error syncing %s", full_name, extra={"delivery_id": delivery_id}
+            )
+            record_webhook_request("watch", "failed")
+            record_sync_operation("failed", 0)
+            return
+
+        result_status = result.get("status", "failed")
+        if result_status == "success":
             record_webhook_request("watch", "success")
-            record_sync_operation("success", result.get("duration_seconds", 0))
-        else:
+            duration = result.get("duration_seconds", 0)
+            record_sync_operation(
+                "success", float(duration) if isinstance(duration, (int, float)) else 0
+            )
+        elif result_status == "already_synced":
             record_webhook_request("watch", "already_synced")
+            record_sync_operation("already_synced", 0)
+        else:
+            record_webhook_request("watch", "failed")
+            record_sync_operation("failed", 0)
 
         logger.info(
-            "Webhook processed successfully",
-            extra={
-                "delivery_id": x_github_delivery,
-                "repository": event.repository.full_name,
-                "result": result,
-            },
+            "Webhook sync finished",
+            extra={"delivery_id": delivery_id, "repository": full_name, "result": result},
         )
-
-        return {"status": "success", "result": result}
-
-    except Exception as e:
-        logger.exception(
-            "Failed to process webhook",
-            extra={
-                "delivery_id": x_github_delivery,
-                "repository": event.repository.full_name,
-                "error": str(e),
-            },
-        )
-        return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"error": "Internal server error"},
-        )
-
+    finally:
+        decrement_active_syncs()

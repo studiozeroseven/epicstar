@@ -43,4 +43,3 @@ def verify_github_signature(payload: bytes, signature_header: Optional[str]) -> 
         logger.warning("Invalid webhook signature")
 
     return is_valid
-

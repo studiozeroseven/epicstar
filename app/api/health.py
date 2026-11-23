@@ -47,4 +47,3 @@ async def root() -> Dict[str, str]:
         "docs": "/docs",
         "health": "/health",
     }
-

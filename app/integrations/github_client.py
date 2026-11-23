@@ -1,6 +1,6 @@
 """GitHub API client."""
 
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 from github import Auth, Github, GithubException
 
@@ -25,7 +25,7 @@ class GitHubClient:
             logger.error(f"Failed to initialize GitHub client: {e}")
             raise GitHubAPIError(f"GitHub client initialization failed: {e}")
 
-    def get_repository_info(self, full_name: str) -> Dict[str, any]:
+    def get_repository_info(self, full_name: str) -> Dict[str, Any]:
         """
         Get repository information.
 
@@ -86,4 +86,3 @@ class GitHubClient:
         """Close GitHub client connection."""
         if hasattr(self, "client"):
             self.client.close()
-

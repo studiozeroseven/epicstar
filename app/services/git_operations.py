@@ -1,13 +1,18 @@
-"""Git operations service."""
+"""Git operations via the git CLI.
+
+Clone/push run as subprocesses (no shell) so the configured timeouts are
+actually enforced and untrusted repo URLs never reach a shared process.
+GitPython was dropped: it offers no timeout support and its URL handling
+carried an RCE CVE class (CVE-2024-22192) on adversarial URLs.
+"""
 
 import os
 import shutil
+import subprocess  # nosec B404 - intentional: git CLI with fixed argv, no shell
 import tempfile
 from pathlib import Path
 from typing import Optional
-
-from git import Repo
-from git.exc import GitCommandError
+from urllib.parse import urlsplit, urlunsplit
 
 from app.config import settings
 from app.core.logging import get_logger
@@ -16,104 +21,105 @@ from app.utils.exceptions import GitOperationError
 logger = get_logger(__name__)
 
 
+def redact_url(url: str) -> str:
+    """Strip userinfo (credentials) from a URL before logging it."""
+    try:
+        parts = urlsplit(url)
+        if parts.username or parts.password:
+            netloc = parts.hostname or ""
+            if parts.port:
+                netloc = f"{netloc}:{parts.port}"
+            return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
+    except ValueError:
+        pass
+    return url
+
+
 class GitOperations:
-    """Git operations handler."""
+    """Git clone/push operations with enforced timeouts."""
 
     def __init__(self) -> None:
-        """Initialize Git operations."""
+        """Initialize git operations."""
         self.temp_dir = settings.git_temp_dir
         self.clone_timeout = settings.git_clone_timeout
         self.push_timeout = settings.git_push_timeout
         self.clone_depth = settings.git_clone_depth
-
-        # Ensure temp directory exists
         Path(self.temp_dir).mkdir(parents=True, exist_ok=True)
 
-    def clone_repository(self, clone_url: str, branch: Optional[str] = None) -> str:
+    def _git(self, args: list[str], *, timeout: int) -> str:
+        """Run git with fixed args (no shell) and a hard timeout.
+
+        Credential prompts are disabled so a bad URL fails fast instead of
+        hanging on stdin. URLs are redacted in logs and errors.
         """
-        Clone a repository.
-
-        Args:
-            clone_url: Repository clone URL
-            branch: Branch to clone (default: None for default branch)
-
-        Returns:
-            Path to cloned repository
-
-        Raises:
-            GitOperationError: If clone fails
-        """
-        # Create temporary directory for this clone
-        temp_repo_dir = tempfile.mkdtemp(dir=self.temp_dir)
-
+        cmd = ["git", *args]
+        redacted = " ".join(redact_url(a) if "://" in a else a for a in args)
+        env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
         try:
-            logger.info(f"Cloning repository from {clone_url}")
-
-            clone_kwargs = {
-                "depth": self.clone_depth if self.clone_depth > 0 else None,
-            }
-
-            if branch:
-                clone_kwargs["branch"] = branch
-
-            repo = Repo.clone_from(
-                clone_url,
-                temp_repo_dir,
-                **clone_kwargs,
+            proc = subprocess.run(  # nosec B603 - fixed argv list, no shell, redacted
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                env=env,
             )
+        except subprocess.TimeoutExpired:
+            raise GitOperationError(f"git {redacted.split(' ', 2)[0]} timed out after {timeout}s")
+        except OSError as e:
+            raise GitOperationError(f"git executable error: {e}")
 
-            logger.info(f"Successfully cloned to {temp_repo_dir}")
+        if proc.returncode != 0:
+            detail = (proc.stderr or proc.stdout or "").strip()[-500:]
+            logger.error("git %s failed rc=%s: %s", redacted, proc.returncode, detail)
+            raise GitOperationError(f"git {redacted} failed: {detail}")
+        return proc.stdout
+
+    def clone_repository(self, clone_url: str, branch: Optional[str] = None) -> str:
+        """Clone a repository (bare) into a temp dir; returns the path."""
+        temp_repo_dir = tempfile.mkdtemp(dir=self.temp_dir)
+        args = [
+            "-c",
+            "credential.helper=",
+            "clone",
+            "--bare",
+        ]
+        if self.clone_depth > 0:
+            args += ["--depth", str(self.clone_depth)]
+        if branch:
+            args += ["--branch", branch, "--single-branch"]
+        args += [clone_url, temp_repo_dir]
+
+        logger.info("Cloning %s", redact_url(clone_url))
+        try:
+            self._git(args, timeout=self.clone_timeout)
+            logger.info("Cloned to %s", temp_repo_dir)
             return temp_repo_dir
-
-        except GitCommandError as e:
-            logger.error(f"Git clone failed: {e}")
+        except GitOperationError:
             self.cleanup_directory(temp_repo_dir)
-            raise GitOperationError(f"Clone failed: {e}")
+            raise
         except Exception as e:
-            logger.error(f"Unexpected error during clone: {e}")
             self.cleanup_directory(temp_repo_dir)
-            raise GitOperationError(f"Unexpected clone error: {e}")
+            raise GitOperationError(f"Unexpected clone error: {e}") from e
 
     def push_repository(
         self, repo_path: str, remote_url: str, branch: Optional[str] = None
     ) -> None:
-        """
-        Push repository to remote.
+        """Push refs from a bare repo to the target remote."""
+        base_args = ["-C", repo_path, "-c", "credential.helper=", "push"]
 
-        Args:
-            repo_path: Path to local repository
-            remote_url: Remote URL to push to
-            branch: Branch to push (default: None for all branches)
-
-        Raises:
-            GitOperationError: If push fails
-        """
+        logger.info("Pushing to %s", redact_url(remote_url))
         try:
-            repo = Repo(repo_path)
-
-            # Add remote if it doesn't exist
-            if "onedev" not in [remote.name for remote in repo.remotes]:
-                repo.create_remote("onedev", remote_url)
-            else:
-                repo.remote("onedev").set_url(remote_url)
-
-            logger.info(f"Pushing to {remote_url}")
-
-            # Push all branches and tags
             if branch:
-                repo.remote("onedev").push(branch, force=False)
+                self._git([*base_args, remote_url, branch], timeout=self.push_timeout)
             else:
-                repo.remote("onedev").push(all=True, force=False)
-                repo.remote("onedev").push(tags=True, force=False)
-
-            logger.info("Successfully pushed to remote")
-
-        except GitCommandError as e:
-            logger.error(f"Git push failed: {e}")
-            raise GitOperationError(f"Push failed: {e}")
+                # Push all branches, then tags (a bare clone holds both).
+                self._git([*base_args, remote_url, "--all"], timeout=self.push_timeout)
+                self._git([*base_args, remote_url, "--tags"], timeout=self.push_timeout)
+            logger.info("Pushed %s", redact_url(remote_url))
+        except GitOperationError:
+            raise
         except Exception as e:
-            logger.error(f"Unexpected error during push: {e}")
-            raise GitOperationError(f"Unexpected push error: {e}")
+            raise GitOperationError(f"Unexpected push error: {e}") from e
 
     def sync_repository(
         self,
@@ -121,61 +127,20 @@ class GitOperations:
         target_url: str,
         branch: Optional[str] = None,
     ) -> None:
-        """
-        Sync repository from source to target.
-
-        Args:
-            source_url: Source repository URL
-            target_url: Target repository URL
-            branch: Branch to sync (default: None for all branches)
-
-        Raises:
-            GitOperationError: If sync fails
-        """
-        repo_path = None
+        """Sync a repository from source to target (clone then push)."""
+        repo_path: Optional[str] = None
         try:
-            # Clone from source
             repo_path = self.clone_repository(source_url, branch)
-
-            # Push to target
             self.push_repository(repo_path, target_url, branch)
-
-            logger.info(f"Successfully synced from {source_url} to {target_url}")
-
         finally:
-            # Cleanup
             if repo_path:
                 self.cleanup_directory(repo_path)
 
     def cleanup_directory(self, path: str) -> None:
-        """
-        Clean up temporary directory.
-
-        Args:
-            path: Directory path to clean up
-        """
+        """Remove a temporary working directory, ignoring errors."""
         try:
             if os.path.exists(path):
-                shutil.rmtree(path)
-                logger.debug(f"Cleaned up directory: {path}")
+                shutil.rmtree(path, ignore_errors=True)
+                logger.debug("Cleaned up directory: %s", path)
         except Exception as e:
-            logger.warning(f"Failed to cleanup directory {path}: {e}")
-
-    def get_repository_size(self, repo_path: str) -> int:
-        """
-        Get repository size in bytes.
-
-        Args:
-            repo_path: Path to repository
-
-        Returns:
-            Size in bytes
-        """
-        total_size = 0
-        for dirpath, dirnames, filenames in os.walk(repo_path):
-            for filename in filenames:
-                filepath = os.path.join(dirpath, filename)
-                if os.path.exists(filepath):
-                    total_size += os.path.getsize(filepath)
-        return total_size
-
+            logger.warning("Failed to cleanup directory %s: %s", path, e)

@@ -2,7 +2,7 @@
 
 import logging
 import sys
-from typing import Any, Dict
+from typing import Any, Dict, Union
 
 from pythonjsonlogger import jsonlogger
 
@@ -39,10 +39,9 @@ def setup_logging() -> None:
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(log_level)
 
+    formatter: Union[CustomJsonFormatter, logging.Formatter]
     if settings.log_format == "json":
-        formatter = CustomJsonFormatter(
-            "%(timestamp)s %(level)s %(name)s %(message)s"
-        )
+        formatter = CustomJsonFormatter("%(timestamp)s %(level)s %(name)s %(message)s")
     else:
         formatter = logging.Formatter(
             "%(asctime)s - %(name)s - %(levelname)s - %(message)s",

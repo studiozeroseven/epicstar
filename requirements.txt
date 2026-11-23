@@ -1,58 +1,47 @@
-# GitHub-to-OneDev Sync Service - Production Dependencies
+# epicstar - Production Dependencies
+# Set is verified installable (installed together from this file before commit).
 
 # =============================================================================
 # Web Framework
 # =============================================================================
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-pydantic==2.4.2
-pydantic-settings==2.0.3
+fastapi>=0.115
+uvicorn[standard]>=0.32
+pydantic>=2.9
+pydantic-settings>=2.6
 
 # =============================================================================
 # Database
 # =============================================================================
-sqlalchemy==2.0.23
-alembic==1.12.1
-psycopg2-binary==2.9.9  # PostgreSQL adapter
-asyncpg==0.29.0  # Async PostgreSQL adapter
+sqlalchemy[asyncio]>=2.0.36
+alembic>=1.14
+asyncpg>=0.30  # async PostgreSQL driver
+aiosqlite>=0.20  # async SQLite driver (the documented default database)
 
 # =============================================================================
 # GitHub Integration
 # =============================================================================
-PyGithub==2.1.1
-cryptography==41.0.7  # For GitHub App JWT authentication
+PyGithub>=2.5
+cryptography>=44  # GitHub App JWT signing (floor: 2024+ CVE fixes)
 
 # =============================================================================
-# HTTP Client
+# HTTP Client (OneDev API)
 # =============================================================================
-httpx==0.25.1
-aiohttp==3.9.1
+httpx>=0.28
 
 # =============================================================================
 # Git Operations
 # =============================================================================
-GitPython==3.1.40
+# GitPython removed: clone/push run via the git CLI in a subprocess instead
+# (honors configured timeouts, avoids GitPython's URL-injection CVE class).
 
 # =============================================================================
 # Utilities
 # =============================================================================
-python-dotenv==1.0.0
-python-multipart==0.0.6
-tenacity==8.2.3  # Retry logic
+python-dotenv>=1.0
+tenacity>=9
 
 # =============================================================================
 # Monitoring & Logging
 # =============================================================================
-prometheus-client==0.19.0
-python-json-logger==2.0.7
-
-# =============================================================================
-# Security
-# =============================================================================
-python-jose[cryptography]==3.3.0  # JWT handling
-
-# =============================================================================
-# Date/Time
-# =============================================================================
-python-dateutil==2.8.2
-
+prometheus-client>=0.21
+python-json-logger>=3

@@ -103,4 +103,3 @@ class WebhookEvent(Base):
 
     # Link to repository
     repository_id = Column(Integer, nullable=True)
-

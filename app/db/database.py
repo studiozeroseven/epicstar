@@ -2,9 +2,14 @@
 
 from typing import AsyncGenerator
 
-from sqlalchemy import create_engine, text
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
+from sqlalchemy.orm import declarative_base
 
 from app.config import settings
 from app.core.logging import get_logger
@@ -13,48 +18,40 @@ logger = get_logger(__name__)
 
 Base = declarative_base()
 
-# Determine if using async or sync engine
-is_sqlite = settings.database_url.startswith("sqlite")
-is_async = not is_sqlite
 
-# Initialize session makers
-AsyncSessionLocal = None
-SessionLocal = None
+def _normalize_url(url: str) -> str:
+    """Map plain driver URLs onto their async equivalents."""
+    if url.startswith("postgresql://"):
+        return url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    if url.startswith("postgres://"):
+        return url.replace("postgres://", "postgresql+asyncpg://", 1)
+    if url.startswith("postgresql+psycopg://"):
+        return url.replace("postgresql+psycopg://", "postgresql+asyncpg://", 1)
+    if url.startswith("sqlite://"):
+        return url.replace("sqlite://", "sqlite+aiosqlite://", 1)
+    return url
 
-if is_async:
-    # PostgreSQL with asyncpg
-    async_engine = create_async_engine(
-        settings.database_url.replace("postgresql://", "postgresql+asyncpg://"),
+
+_database_url = _normalize_url(settings.database_url)
+_is_postgres = _database_url.startswith("postgresql")
+
+async_engine: AsyncEngine = (
+    create_async_engine(
+        _database_url,
         pool_size=settings.database_pool_size,
         max_overflow=settings.database_max_overflow,
         pool_recycle=settings.database_pool_recycle,
         echo=False,
     )
-    AsyncSessionLocal = async_sessionmaker(
-        async_engine,
-        class_=AsyncSession,
-        expire_on_commit=False,
-    )
-else:
-    # SQLite with aiosqlite for async support
-    engine = create_engine(
-        settings.database_url,
-        connect_args={"check_same_thread": False} if is_sqlite else {},
-        echo=False,
-    )
-    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    
-    # Create async session for SQLite too
-    async_engine = create_async_engine(
-        settings.database_url.replace("sqlite://", "sqlite+aiosqlite://"),
-        connect_args={"check_same_thread": False},
-        echo=False,
-    )
-    AsyncSessionLocal = async_sessionmaker(
-        async_engine,
-        class_=AsyncSession,
-        expire_on_commit=False,
-    )
+    if _is_postgres
+    else create_async_engine(_database_url, echo=False)
+)
+
+AsyncSessionLocal = async_sessionmaker(
+    async_engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+)
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
@@ -84,3 +81,8 @@ async def init_db() -> None:
     async with async_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     logger.info("Database initialized")
+
+
+async def dispose_db() -> None:
+    """Dispose of the connection pool (lifespan shutdown)."""
+    await async_engine.dispose()

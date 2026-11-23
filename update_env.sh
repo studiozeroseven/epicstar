@@ -1,15 +1,23 @@
 #!/bin/bash
+# One-shot helper: point .env at the local GitHub App key and remind you what's left.
 
-echo "🔧 Updating .env file with GitHub App private key path..."
+cd "$(dirname "$0")" || exit 1
 
-# Update the private key path in .env
-sed -i '' 's|GITHUB_PRIVATE_KEY_PATH=.*|GITHUB_PRIVATE_KEY_PATH=/Users/ian/.ssh/epicstar-github-app.pem|' .env
+if [ ! -f .env ]; then
+    echo "No .env found - create one first: cp .env.example .env"
+    exit 1
+fi
 
-echo "✅ Private key path updated!"
+KEY_PATH="${1:-$HOME/.ssh/epicstar-github-app.pem}"
+if [[ "$OSTYPE" == darwin* ]]; then
+    sed -i '' "s|^GITHUB_PRIVATE_KEY_PATH=.*|GITHUB_PRIVATE_KEY_PATH=$KEY_PATH|" .env
+else
+    sed -i "s|^GITHUB_PRIVATE_KEY_PATH=.*|GITHUB_PRIVATE_KEY_PATH=$KEY_PATH|" .env
+fi
+echo "GITHUB_PRIVATE_KEY_PATH set to $KEY_PATH"
+
 echo ""
-echo "📋 Current .env configuration:"
-grep -E "GITHUB_|ONEDEV_" .env
-echo ""
-echo "⚠️  You still need to update:"
-echo "   1. GITHUB_APP_ID (get from https://github.com/settings/apps)"
-echo "   2. ONEDEV_API_TOKEN (get from https://dev.vivaed.com)"
+echo "Still required in .env:"
+echo "  1. GITHUB_APP_ID        (https://github.com/settings/apps)"
+echo "  2. GITHUB_WEBHOOK_SECRET (openssl rand -hex 32)"
+echo "  3. ONEDEV_API_URL / ONEDEV_USERNAME / ONEDEV_API_TOKEN"

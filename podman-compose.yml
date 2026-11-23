@@ -20,8 +20,10 @@ services:
       
       # OneDev
       - ONEDEV_API_URL=${ONEDEV_API_URL}
+      - ONEDEV_USERNAME=${ONEDEV_USERNAME}
       - ONEDEV_API_TOKEN=${ONEDEV_API_TOKEN}
       - ONEDEV_REPO_PREFIX=${ONEDEV_REPO_PREFIX:-github-}
+      - ONEDEV_CONFLICT_STRATEGY=${ONEDEV_CONFLICT_STRATEGY:-use_existing}
       
       # Database
       - DATABASE_URL=${DATABASE_URL:-postgresql://syncuser:syncpass@db:5432/syncdb}

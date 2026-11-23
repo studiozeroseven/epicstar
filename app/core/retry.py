@@ -27,27 +27,27 @@ DEFAULT_MULTIPLIER = 2
 
 def get_retry_config(
     max_attempts: int = DEFAULT_MAX_ATTEMPTS,
-    min_wait: int = DEFAULT_MIN_WAIT,
-    max_wait: int = DEFAULT_MAX_WAIT,
-    multiplier: int = DEFAULT_MULTIPLIER,
+    min_wait: float = DEFAULT_MIN_WAIT,
+    max_wait: float = DEFAULT_MAX_WAIT,
+    multiplier: float = DEFAULT_MULTIPLIER,
     retry_exceptions: Optional[Tuple[Type[Exception], ...]] = None,
 ) -> AsyncRetrying:
     """
     Get retry configuration with exponential backoff.
-    
+
     Args:
         max_attempts: Maximum number of retry attempts
         min_wait: Minimum wait time in seconds
         max_wait: Maximum wait time in seconds
         multiplier: Exponential backoff multiplier
         retry_exceptions: Tuple of exception types to retry on
-        
+
     Returns:
         AsyncRetrying instance configured with specified parameters
     """
     if retry_exceptions is None:
         retry_exceptions = (RetryableError, GitOperationError, OneDevAPIError)
-    
+
     return AsyncRetrying(
         stop=stop_after_attempt(max_attempts),
         wait=wait_exponential(
@@ -62,20 +62,21 @@ def get_retry_config(
 
 def with_retry(
     max_attempts: int = DEFAULT_MAX_ATTEMPTS,
-    min_wait: int = DEFAULT_MIN_WAIT,
-    max_wait: int = DEFAULT_MAX_WAIT,
-    multiplier: int = DEFAULT_MULTIPLIER,
+    min_wait: float = DEFAULT_MIN_WAIT,
+    max_wait: float = DEFAULT_MAX_WAIT,
+    multiplier: float = DEFAULT_MULTIPLIER,
     retry_exceptions: Optional[Tuple[Type[Exception], ...]] = None,
 ) -> Callable:
     """
     Decorator to add retry logic to async functions.
-    
+
     Usage:
         @with_retry(max_attempts=5)
         async def my_function():
             # Your code here
             pass
     """
+
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -86,35 +87,28 @@ def with_retry(
                 multiplier=multiplier,
                 retry_exceptions=retry_exceptions,
             )
-            
+
             attempt = 0
             async for attempt_state in retry_config:
                 with attempt_state:
                     attempt += 1
                     try:
-                        logger.info(
-                            f"Executing {func.__name__} (attempt {attempt}/{max_attempts})"
-                        )
+                        logger.info(f"Executing {func.__name__} (attempt {attempt}/{max_attempts})")
                         result = await func(*args, **kwargs)
                         if attempt > 1:
-                            logger.info(
-                                f"{func.__name__} succeeded after {attempt} attempts"
-                            )
+                            logger.info(f"{func.__name__} succeeded after {attempt} attempts")
                         return result
                     except Exception as e:
-                        logger.warning(
-                            f"{func.__name__} failed on attempt {attempt}: {str(e)}"
-                        )
+                        logger.warning(f"{func.__name__} failed on attempt {attempt}: {str(e)}")
                         if attempt >= max_attempts:
-                            logger.error(
-                                f"{func.__name__} failed after {max_attempts} attempts"
-                            )
+                            logger.error(f"{func.__name__} failed after {max_attempts} attempts")
                         raise
-            
+
             # This should never be reached due to reraise=True
-            raise RetryError("Retry failed")
-        
+            raise RetryableError(f"{func.__name__} exhausted {max_attempts} attempts")
+
         return wrapper
+
     return decorator
 
 
@@ -122,17 +116,17 @@ async def retry_with_backoff(
     func: Callable,
     *args: Any,
     max_attempts: int = DEFAULT_MAX_ATTEMPTS,
-    min_wait: int = DEFAULT_MIN_WAIT,
-    max_wait: int = DEFAULT_MAX_WAIT,
-    multiplier: int = DEFAULT_MULTIPLIER,
+    min_wait: float = DEFAULT_MIN_WAIT,
+    max_wait: float = DEFAULT_MAX_WAIT,
+    multiplier: float = DEFAULT_MULTIPLIER,
     retry_exceptions: Optional[Tuple[Type[Exception], ...]] = None,
     **kwargs: Any,
 ) -> Any:
     """
     Execute a function with retry logic.
-    
+
     This is a functional alternative to the @with_retry decorator.
-    
+
     Args:
         func: Async function to execute
         *args: Positional arguments for func
@@ -142,10 +136,10 @@ async def retry_with_backoff(
         multiplier: Exponential backoff multiplier
         retry_exceptions: Tuple of exception types to retry on
         **kwargs: Keyword arguments for func
-        
+
     Returns:
         Result of func execution
-        
+
     Raises:
         RetryError: If all retry attempts fail
     """
@@ -156,31 +150,22 @@ async def retry_with_backoff(
         multiplier=multiplier,
         retry_exceptions=retry_exceptions,
     )
-    
+
     attempt = 0
     async for attempt_state in retry_config:
         with attempt_state:
             attempt += 1
             try:
-                logger.info(
-                    f"Executing {func.__name__} (attempt {attempt}/{max_attempts})"
-                )
+                logger.info(f"Executing {func.__name__} (attempt {attempt}/{max_attempts})")
                 result = await func(*args, **kwargs)
                 if attempt > 1:
-                    logger.info(
-                        f"{func.__name__} succeeded after {attempt} attempts"
-                    )
+                    logger.info(f"{func.__name__} succeeded after {attempt} attempts")
                 return result
             except Exception as e:
-                logger.warning(
-                    f"{func.__name__} failed on attempt {attempt}: {str(e)}"
-                )
+                logger.warning(f"{func.__name__} failed on attempt {attempt}: {str(e)}")
                 if attempt >= max_attempts:
-                    logger.error(
-                        f"{func.__name__} failed after {max_attempts} attempts"
-                    )
+                    logger.error(f"{func.__name__} failed after {max_attempts} attempts")
                 raise
-    
-    # This should never be reached due to reraise=True
-    raise RetryError("Retry failed")
 
+    # This should never be reached due to reraise=True
+    raise RetryableError(f"{func.__name__} exhausted {max_attempts} attempts")
